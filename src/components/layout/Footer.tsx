@@ -1,12 +1,11 @@
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Anchor, Facebook, Instagram, Twitter, Mail, Phone, MapPin } from "lucide-react";
-
 const Footer = () => {
-  const { t } = useLanguage();
-
-  return (
-    <footer className="bg-card border-t border-border">
+  const {
+    t
+  } = useLanguage();
+  return <footer className="bg-card border-t border-border">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Brand */}
@@ -19,22 +18,13 @@ const Footer = () => {
               {t("footer.tagline")}
             </p>
             <div className="flex gap-4">
-              <a
-                href="#"
-                className="text-muted-foreground hover:text-primary transition-colors"
-              >
+              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
                 <Facebook className="h-5 w-5" />
               </a>
-              <a
-                href="#"
-                className="text-muted-foreground hover:text-primary transition-colors"
-              >
+              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
                 <Instagram className="h-5 w-5" />
               </a>
-              <a
-                href="#"
-                className="text-muted-foreground hover:text-primary transition-colors"
-              >
+              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
                 <Twitter className="h-5 w-5" />
               </a>
             </div>
@@ -79,8 +69,7 @@ const Footer = () => {
                 <Phone className="h-4 w-4" />
                 +20 123 456 7890
               </li>
-              <li className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="h-4 w-4" />
+              <li className="flex items-center gap-2 text-muted-foreground">Alexandria, Egypt<MapPin className="h-4 w-4" />
                 Cairo, Egypt
               </li>
             </ul>
@@ -114,8 +103,6 @@ const Footer = () => {
           <p>© {new Date().getFullYear()} SeaScape Egypt. {t("footer.rights")}</p>
         </div>
       </div>
-    </footer>
-  );
+    </footer>;
 };
-
 export default Footer;
