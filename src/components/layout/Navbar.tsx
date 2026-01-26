@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,7 +26,8 @@ import {
 const Navbar = () => {
   const { t, language, setLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -103,7 +104,7 @@ const Navbar = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuItem className="font-medium">
-                    {user.name}
+                    {profile?.name || user.email}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
@@ -119,7 +120,7 @@ const Navbar = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout} className="text-destructive">
+                  <DropdownMenuItem onClick={() => { logout(); navigate("/"); }} className="text-destructive">
                     <LogOut className="h-4 w-4 mr-2" />
                     {t("nav.logout")}
                   </DropdownMenuItem>
@@ -182,7 +183,7 @@ const Navbar = () => {
 
                   {user ? (
                     <>
-                      <p className="font-medium">{user.name}</p>
+                      <p className="font-medium">{profile?.name || user.email}</p>
                       <Link
                         to="/profile"
                         onClick={() => setMobileOpen(false)}
@@ -202,6 +203,7 @@ const Navbar = () => {
                         onClick={() => {
                           logout();
                           setMobileOpen(false);
+                          navigate("/");
                         }}
                       >
                         <LogOut className="h-4 w-4 mr-2" />

@@ -3,7 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import YachtCard from "@/components/yacht/YachtCard";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { yachts, locations, activityTypes, Location, ActivityType } from "@/lib/data";
+import { useYachts, Yacht } from "@/hooks/useYachts";
+import { locations, activityTypes, Location, ActivityType } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { SlidersHorizontal, Search, X } from "lucide-react";
+import { SlidersHorizontal, Search, X, Loader2, Anchor } from "lucide-react";
 
 const YachtsPage = () => {
   const { t, language } = useLanguage();
@@ -33,18 +34,21 @@ const YachtsPage = () => {
   const [minCapacity, setMinCapacity] = useState([1]);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // Fetch yachts from database
+  const { yachts, isLoading, error } = useYachts();
+
   const filteredYachts = useMemo(() => {
     return yachts.filter((yacht) => {
-      const name = language === "ar" ? yacht.nameAr : yacht.name;
+      const name = language === "ar" ? (yacht.name_ar || yacht.name) : yacht.name;
       const matchesSearch = name.toLowerCase().includes(search.toLowerCase());
       const matchesLocation = location === "all" || yacht.location === location;
       const matchesType = type === "all" || yacht.type === type;
-      const matchesPrice = yacht.pricePerPerson <= maxPrice[0];
+      const matchesPrice = Number(yacht.price_per_person) <= maxPrice[0];
       const matchesCapacity = yacht.capacity >= minCapacity[0];
       
       return matchesSearch && matchesLocation && matchesType && matchesPrice && matchesCapacity;
     });
-  }, [search, location, type, maxPrice, minCapacity, language]);
+  }, [yachts, search, location, type, maxPrice, minCapacity, language]);
 
   const clearFilters = () => {
     setSearch("");
@@ -134,6 +138,29 @@ const YachtsPage = () => {
     </div>
   );
 
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <Anchor className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">Failed to load yachts</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="min-h-screen py-8">
@@ -192,12 +219,15 @@ const YachtsPage = () => {
                 </div>
               ) : (
                 <div className="text-center py-16">
+                  <Anchor className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <p className="text-muted-foreground text-lg">
-                    {t("listings.noResults")}
+                    {yachts.length === 0 ? "No yachts available yet" : t("listings.noResults")}
                   </p>
-                  <Button variant="outline" onClick={clearFilters} className="mt-4">
-                    Clear Filters
-                  </Button>
+                  {hasActiveFilters && (
+                    <Button variant="outline" onClick={clearFilters} className="mt-4">
+                      Clear Filters
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

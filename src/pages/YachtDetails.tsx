@@ -3,7 +3,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { yachts, formatPrice, getLocationName, generateBookingId, calculatePlatformFee, Booking } from "@/lib/data";
+import { useYacht, useAvailability } from "@/hooks/useYachts";
+import { useBookings } from "@/hooks/useBookings";
+import { formatPrice } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
@@ -30,9 +32,13 @@ import {
   CreditCard,
   Wallet,
   ChevronLeft,
-  ChevronRight,
-  QrCode,
+  Loader2,
 } from "lucide-react";
+
+// Default placeholder images
+import yacht1 from "@/assets/yacht-1.jpg";
+import yacht2 from "@/assets/yacht-2.jpg";
+import yacht3 from "@/assets/yacht-3.jpg";
 
 const amenityIcons: Record<string, React.ReactNode> = {
   WiFi: <Wifi className="h-4 w-4" />,
@@ -44,13 +50,20 @@ const timeSlots = [
   "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"
 ];
 
+const locationNames: Record<string, string> = {
+  "marsa-matruh": "Marsa Matruh",
+  "north-coast": "North Coast (Sahel)",
+  "alexandria": "Alexandria",
+  "el-gouna": "El Gouna",
+};
+
 const YachtDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t, language } = useLanguage();
-  const { user, addBooking } = useAuth();
-
-  const yacht = yachts.find((y) => y.id === id);
+  const { user } = useAuth();
+  const { yacht, isLoading: yachtLoading, error } = useYacht(id);
+  const { createBooking } = useBookings();
 
   const [selectedImage, setSelectedImage] = useState(0);
   const [date, setDate] = useState<Date | undefined>();
@@ -58,23 +71,47 @@ const YachtDetails = () => {
   const [guests, setGuests] = useState<number>(1);
   const [paymentMethod, setPaymentMethod] = useState<"online" | "cash">("online");
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [bookingData, setBookingData] = useState<Booking | null>(null);
+  const [bookingData, setBookingData] = useState<{ reference: string; qrData: string } | null>(null);
+  const [isBooking, setIsBooking] = useState(false);
 
-  if (!yacht) {
+  const { slotsRemaining } = useAvailability(id, date);
+
+  if (yachtLoading) {
     return (
       <Layout>
         <div className="min-h-screen flex items-center justify-center">
-          <p>Yacht not found</p>
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       </Layout>
     );
   }
 
-  const subtotal = yacht.pricePerPerson * guests;
-  const platformFee = calculatePlatformFee(subtotal);
+  if (error || !yacht) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <Anchor className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">Yacht not found</p>
+            <Button className="mt-4" onClick={() => navigate("/yachts")}>
+              Browse Yachts
+            </Button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Use yacht images or fallback to defaults
+  const images = yacht.image_urls?.length ? yacht.image_urls : [yacht1, yacht2, yacht3];
+
+  const subtotal = Number(yacht.price_per_person) * guests;
+  const platformFee = Math.round(subtotal * 0.05);
   const total = subtotal + platformFee;
 
-  const handleBooking = () => {
+  const maxGuests = slotsRemaining !== null ? Math.min(slotsRemaining, yacht.capacity) : yacht.capacity;
+
+  const handleBooking = async () => {
     if (!user) {
       toast.error("Please login to make a booking");
       navigate("/auth?mode=login");
@@ -86,25 +123,32 @@ const YachtDetails = () => {
       return;
     }
 
-    const booking: Booking = {
-      id: generateBookingId(),
-      yachtId: yacht.id,
-      yachtName: yacht.name,
-      date: format(date, "yyyy-MM-dd"),
-      time,
-      guests,
-      totalPrice: total,
-      platformFee,
-      paymentMethod,
-      status: "confirmed",
-      qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=SEASCAPE-${generateBookingId()}`,
-      location: yacht.location,
-      createdAt: new Date().toISOString(),
-    };
+    if (guests > maxGuests) {
+      toast.error(`Only ${maxGuests} spots available for this date`);
+      return;
+    }
 
-    addBooking(booking);
-    setBookingData(booking);
-    setShowConfirmation(true);
+    setIsBooking(true);
+
+    try {
+      const result = await createBooking(yacht.id, date, time, guests, paymentMethod);
+
+      if (result.success && result.bookingReference) {
+        const qrData = `SEASCAPE:${result.bookingReference}`;
+        setBookingData({
+          reference: result.bookingReference,
+          qrData,
+        });
+        setShowConfirmation(true);
+        toast.success("Booking confirmed!");
+      } else {
+        toast.error(result.error || "Booking failed");
+      }
+    } catch (err) {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsBooking(false);
+    }
   };
 
   return (
@@ -128,13 +172,13 @@ const YachtDetails = () => {
               <div className="space-y-4">
                 <div className="aspect-video rounded-2xl overflow-hidden">
                   <img
-                    src={yacht.images[selectedImage]}
+                    src={images[selectedImage]}
                     alt={yacht.name}
                     className="w-full h-full object-cover"
                   />
                 </div>
                 <div className="flex gap-2 overflow-x-auto pb-2">
-                  {yacht.images.map((img, idx) => (
+                  {images.map((img, idx) => (
                     <button
                       key={idx}
                       onClick={() => setSelectedImage(idx)}
@@ -154,23 +198,23 @@ const YachtDetails = () => {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <h1 className="text-3xl font-bold">
-                      {language === "ar" ? yacht.nameAr : yacht.name}
+                      {language === "ar" ? yacht.name_ar || yacht.name : yacht.name}
                     </h1>
                     <div className="flex items-center gap-4 mt-2 text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <MapPin className="h-4 w-4" />
-                        <span>{getLocationName(yacht.location)}</span>
+                        <span>{locationNames[yacht.location] || yacht.location}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span>{yacht.rating}</span>
-                        <span>({yacht.reviewCount} {t("details.reviews")})</span>
+                        <span>{yacht.rating || 0}</span>
+                        <span>({yacht.review_count || 0} {t("details.reviews")})</span>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="text-3xl font-bold text-primary">
-                      {formatPrice(yacht.pricePerPerson)}
+                      {formatPrice(Number(yacht.price_per_person))}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {t("listings.perPerson")}
@@ -186,50 +230,59 @@ const YachtDetails = () => {
                   </Badge>
                   <Badge variant="secondary" className="text-sm py-1.5 px-3">
                     <Clock className="h-4 w-4 mr-2" />
-                    {formatPrice(yacht.pricePerHour)} {t("listings.perHour")}
+                    {formatPrice(Number(yacht.price_per_hour))} {t("listings.perHour")}
                   </Badge>
+                  {date && slotsRemaining !== null && (
+                    <Badge variant="outline" className="text-sm py-1.5 px-3">
+                      {slotsRemaining} spots left
+                    </Badge>
+                  )}
                 </div>
 
                 {/* Description */}
                 <div>
                   <p className="text-muted-foreground">
-                    {language === "ar" ? yacht.descriptionAr : yacht.description}
+                    {language === "ar" ? yacht.description_ar || yacht.description : yacht.description}
                   </p>
                 </div>
 
                 {/* What's Included */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">{t("details.included")}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {yacht.included.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <Check className="h-4 w-4 text-accent" />
-                          <span className="text-sm">{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                {yacht.included && yacht.included.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">{t("details.included")}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {yacht.included.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <Check className="h-4 w-4 text-accent" />
+                            <span className="text-sm">{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Amenities */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">{t("details.amenities")}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {yacht.amenities.map((amenity, idx) => (
-                        <Badge key={idx} variant="outline" className="py-1.5 px-3">
-                          {amenityIcons[amenity] || <Anchor className="h-4 w-4 mr-2" />}
-                          {amenity}
-                        </Badge>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                {yacht.amenities && yacht.amenities.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">{t("details.amenities")}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-2">
+                        {yacht.amenities.map((amenity, idx) => (
+                          <Badge key={idx} variant="outline" className="py-1.5 px-3">
+                            {amenityIcons[amenity] || <Anchor className="h-4 w-4 mr-2" />}
+                            {amenity}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
 
@@ -301,12 +354,13 @@ const YachtDetails = () => {
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => setGuests(Math.min(yacht.capacity, guests + 1))}
+                        onClick={() => setGuests(Math.min(maxGuests, guests + 1))}
+                        disabled={guests >= maxGuests}
                       >
                         +
                       </Button>
                       <span className="text-sm text-muted-foreground">
-                        (max {yacht.capacity})
+                        (max {maxGuests})
                       </span>
                     </div>
                   </div>
@@ -351,7 +405,13 @@ const YachtDetails = () => {
                     </div>
                   </div>
 
-                  <Button className="w-full" size="lg" onClick={handleBooking}>
+                  <Button 
+                    className="w-full" 
+                    size="lg" 
+                    onClick={handleBooking}
+                    disabled={isBooking}
+                  >
+                    {isBooking && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     {t("booking.confirm")}
                   </Button>
                 </CardContent>
@@ -373,12 +433,12 @@ const YachtDetails = () => {
             <div className="space-y-6 py-4">
               <div className="text-center">
                 <p className="text-muted-foreground mb-2">{t("booking.reference")}</p>
-                <p className="text-2xl font-mono font-bold text-primary">{bookingData.id}</p>
+                <p className="text-2xl font-mono font-bold text-primary">{bookingData.reference}</p>
               </div>
 
               <div className="flex justify-center">
                 <img
-                  src={bookingData.qrCode}
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(bookingData.qrData)}`}
                   alt="Booking QR Code"
                   className="w-48 h-48 rounded-lg border"
                 />
@@ -387,23 +447,23 @@ const YachtDetails = () => {
               <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Yacht</span>
-                  <span className="font-medium">{bookingData.yachtName}</span>
+                  <span className="font-medium">{yacht.name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Date</span>
-                  <span className="font-medium">{bookingData.date}</span>
+                  <span className="font-medium">{date ? format(date, "PPP") : ""}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Time</span>
-                  <span className="font-medium">{bookingData.time}</span>
+                  <span className="font-medium">{time}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Guests</span>
-                  <span className="font-medium">{bookingData.guests}</span>
+                  <span className="font-medium">{guests}</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t">
                   <span className="font-medium">Total</span>
-                  <span className="font-bold text-primary">{formatPrice(bookingData.totalPrice)}</span>
+                  <span className="font-bold text-primary">{formatPrice(total)}</span>
                 </div>
               </div>
 
