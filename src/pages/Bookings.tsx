@@ -2,9 +2,10 @@ import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatPrice, getLocationName } from "@/lib/data";
+import { useBookings } from "@/hooks/useBookings";
+import { formatPrice } from "@/lib/data";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -17,11 +18,20 @@ import {
   X,
   ChevronLeft,
   Anchor,
+  Loader2,
 } from "lucide-react";
+
+const locationNames: Record<string, string> = {
+  "marsa-matruh": "Marsa Matruh",
+  "north-coast": "North Coast (Sahel)",
+  "alexandria": "Alexandria",
+  "el-gouna": "El Gouna",
+};
 
 const BookingsPage = () => {
   const { t } = useLanguage();
-  const { user, bookings, cancelBooking } = useAuth();
+  const { user } = useAuth();
+  const { bookings, isLoading, cancelBooking } = useBookings();
   const navigate = useNavigate();
 
   if (!user) {
@@ -36,22 +46,31 @@ const BookingsPage = () => {
     (b) => b.status === "cancelled" || new Date(b.date) < new Date()
   );
 
-  const handleCancel = (bookingId: string) => {
-    cancelBooking(bookingId);
-    toast.success("Booking cancelled successfully");
+  const handleCancel = async (bookingId: string) => {
+    const result = await cancelBooking(bookingId);
+    if (result.success) {
+      toast.success("Booking cancelled successfully");
+    } else {
+      toast.error(result.error || "Failed to cancel booking");
+    }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "confirmed":
         return "bg-accent text-accent-foreground";
-      case "completed":
+      case "boarded":
         return "bg-muted text-muted-foreground";
       case "cancelled":
         return "bg-destructive/10 text-destructive";
       default:
         return "bg-secondary text-secondary-foreground";
     }
+  };
+
+  const generateQrUrl = (qrData: string | null) => {
+    if (!qrData) return null;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
   };
 
   const BookingCard = ({ booking, showCancel = false }: { booking: typeof bookings[0]; showCancel?: boolean }) => (
@@ -61,10 +80,10 @@ const BookingsPage = () => {
           <div className="flex-1 space-y-3">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-lg font-semibold">{booking.yachtName}</h3>
+                <h3 className="text-lg font-semibold">{booking.yacht?.name || "Unknown Yacht"}</h3>
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
-                  {getLocationName(booking.location)}
+                  {locationNames[booking.yacht?.location || ""] || booking.yacht?.location}
                 </p>
               </div>
               <Badge className={getStatusColor(booking.status)}>
@@ -79,24 +98,24 @@ const BookingsPage = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
-                <span>{booking.time}</span>
+                <span>{booking.time_slot}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-muted-foreground" />
-                <span>{booking.guests} guests</span>
+                <span>{booking.seats} guests</span>
               </div>
               <div className="font-semibold text-primary">
-                {formatPrice(booking.totalPrice)}
+                {formatPrice(Number(booking.total_price))}
               </div>
             </div>
 
             <div className="flex items-center gap-4 pt-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="font-mono">{booking.id}</span>
+                <span className="font-mono">{booking.booking_reference}</span>
               </div>
-              {booking.status === "confirmed" && (
+              {booking.status === "confirmed" && booking.qr_code_data && (
                 <a
-                  href={booking.qrCode}
+                  href={generateQrUrl(booking.qr_code_data) || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 text-sm text-primary hover:underline"
@@ -123,6 +142,16 @@ const BookingsPage = () => {
       </CardContent>
     </Card>
   );
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

@@ -2,14 +2,16 @@ import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBookings } from "@/hooks/useBookings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChevronLeft, Mail, Phone, User, CalendarDays, LogOut } from "lucide-react";
+import { ChevronLeft, Mail, Phone, CalendarDays, LogOut, Loader2 } from "lucide-react";
 
 const ProfilePage = () => {
   const { t } = useLanguage();
-  const { user, bookings, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
+  const { bookings, isLoading } = useBookings();
   const navigate = useNavigate();
 
   if (!user) {
@@ -17,14 +19,26 @@ const ProfilePage = () => {
     return null;
   }
 
-  const initials = user.name
+  const displayName = profile?.name || user.email?.split("@")[0] || "User";
+  const initials = displayName
     .split(" ")
     .map((n) => n[0])
     .join("")
-    .toUpperCase();
+    .toUpperCase()
+    .slice(0, 2);
 
   const confirmedBookings = bookings.filter((b) => b.status === "confirmed").length;
-  const completedBookings = bookings.filter((b) => b.status === "completed").length;
+  const boardedBookings = bookings.filter((b) => b.status === "boarded").length;
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -48,7 +62,7 @@ const ProfilePage = () => {
                   </AvatarFallback>
                 </Avatar>
               </div>
-              <CardTitle className="text-2xl">{user.name}</CardTitle>
+              <CardTitle className="text-2xl">{displayName}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
@@ -56,15 +70,15 @@ const ProfilePage = () => {
                   <Mail className="h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{user.email}</p>
+                    <p className="font-medium">{profile?.email || user.email}</p>
                   </div>
                 </div>
-                {user.phone && (
+                {profile?.phone && (
                   <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
                     <Phone className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <p className="text-sm text-muted-foreground">Phone</p>
-                      <p className="font-medium">{user.phone}</p>
+                      <p className="font-medium">{profile.phone}</p>
                     </div>
                   </div>
                 )}
@@ -76,7 +90,7 @@ const ProfilePage = () => {
                   <p className="text-sm text-muted-foreground">Upcoming Trips</p>
                 </div>
                 <div className="p-4 bg-accent/10 rounded-lg text-center">
-                  <p className="text-3xl font-bold text-accent">{completedBookings}</p>
+                  <p className="text-3xl font-bold text-accent">{boardedBookings}</p>
                   <p className="text-sm text-muted-foreground">Completed</p>
                 </div>
               </div>
