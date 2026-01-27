@@ -61,7 +61,8 @@ const Footer = () => {
           <div className="space-y-4">
             <h3 className="font-semibold">{t("footer.contact")}</h3>
             <ul className="space-y-3 text-sm">
-              <li className="flex items-center gap-2 text-muted-foreground">seascap.eg@gmail.com<Mail className="h-4 w-4" />
+              <li className="flex items-center gap-2 text-muted-foreground">seascape.eg@gmail.com
+​<Mail className="h-4 w-4" />
                 ​
               </li>
               <li className="flex items-center gap-2 text-muted-foreground">+20 1096310909<Phone className="h-4 w-4" />
