@@ -20,16 +20,19 @@ import {
   Globe, 
   User, 
   LogOut,
-  CalendarDays
+  CalendarDays,
+  LayoutDashboard
 } from "lucide-react";
 
 const Navbar = () => {
   const { t, language, setLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
-  const { user, profile, logout } = useAuth();
+  const { user, profile, logout, isAdmin, isOwner, isStaff } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  
+  const showAdminLink = isAdmin || isOwner || isStaff;
 
   const navLinks = [
     { href: "/", label: t("nav.home") },
@@ -119,6 +122,14 @@ const Navbar = () => {
                       {t("nav.bookings")}
                     </Link>
                   </DropdownMenuItem>
+                  {showAdminLink && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="flex items-center gap-2">
+                        <LayoutDashboard className="h-4 w-4" />
+                        Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => { logout(); navigate("/"); }} className="text-destructive">
                     <LogOut className="h-4 w-4 mr-2" />
@@ -198,6 +209,16 @@ const Navbar = () => {
                       >
                         {t("nav.bookings")}
                       </Link>
+                      {showAdminLink && (
+                        <Link
+                          to="/admin"
+                          onClick={() => setMobileOpen(false)}
+                          className="text-muted-foreground flex items-center gap-2"
+                        >
+                          <LayoutDashboard className="h-4 w-4" />
+                          Dashboard
+                        </Link>
+                      )}
                       <Button
                         variant="destructive"
                         onClick={() => {
