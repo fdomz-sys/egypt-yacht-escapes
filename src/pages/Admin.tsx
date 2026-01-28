@@ -55,7 +55,7 @@ const Admin = () => {
                 <Calendar className="h-4 w-4" />
                 <span className="hidden sm:inline">Bookings</span>
               </TabsTrigger>
-              {(isAdmin || isStaff) && (
+              {(isAdmin || isOwner || isStaff) && (
                 <TabsTrigger value="scanner" className="flex items-center gap-2">
                   <Scan className="h-4 w-4" />
                   <span className="hidden sm:inline">Scanner</span>
@@ -77,7 +77,7 @@ const Admin = () => {
               <BookingsManagement />
             </TabsContent>
 
-            {(isAdmin || isStaff) && (
+            {(isAdmin || isOwner || isStaff) && (
               <TabsContent value="scanner">
                 <QRScanner />
               </TabsContent>

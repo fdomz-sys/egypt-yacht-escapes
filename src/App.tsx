@@ -13,6 +13,9 @@ import Auth from "./pages/Auth";
 import Bookings from "./pages/Bookings";
 import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
+import About from "./pages/About";
+import FAQ from "./pages/FAQ";
+import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +37,9 @@ const App = () => (
                 <Route path="/bookings" element={<Bookings />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/admin" element={<Admin />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/faq" element={<FAQ />} />
+                <Route path="/terms" element={<Terms />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
