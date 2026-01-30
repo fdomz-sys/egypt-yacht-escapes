@@ -7,25 +7,43 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Camera, CameraOff, CheckCircle2, XCircle, User, Ship, Calendar, Users, Loader2 } from "lucide-react";
+import { 
+  Camera, 
+  CameraOff, 
+  CheckCircle2, 
+  XCircle, 
+  User, 
+  Ship, 
+  Calendar, 
+  Users, 
+  Loader2,
+  AlertTriangle,
+  Clock,
+  DollarSign,
+  Phone,
+  Mail
+} from "lucide-react";
+
+interface BookingInfo {
+  booking_id: string;
+  booking_reference: string;
+  guest_name: string;
+  guest_email: string;
+  guest_phone: string | null;
+  yacht_name: string;
+  yacht_location: string;
+  date: string;
+  time_slot: string;
+  seats: number;
+  total_price: number;
+  status: string;
+  payment_method: string;
+}
 
 interface ScanResult {
   success: boolean;
   error_message: string | null;
-  booking_info: {
-    booking_id: string;
-    booking_reference: string;
-    guest_name: string;
-    guest_email: string;
-    guest_phone: string | null;
-    yacht_name: string;
-    yacht_location: string;
-    date: string;
-    time_slot: string;
-    seats: number;
-    total_price: number;
-    status: string;
-  } | null;
+  booking_info: BookingInfo | null;
 }
 
 const QRScanner = () => {
@@ -33,6 +51,7 @@ const QRScanner = () => {
   const [manualCode, setManualCode] = useState("");
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isMarkingUsed, setIsMarkingUsed] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerId = "qr-reader";
 
@@ -71,7 +90,6 @@ const QRScanner = () => {
   };
 
   const onScanSuccess = async (decodedText: string) => {
-    // Stop scanner to prevent duplicate scans
     await stopScanner();
     await processQRCode(decodedText);
   };
@@ -92,17 +110,57 @@ const QRScanner = () => {
       });
       toast.error(error.message);
     } else {
-      const result = data?.[0] as ScanResult;
-      setLastResult(result);
-
-      if (result?.success) {
-        toast.success("Guest checked in successfully!");
-      } else {
-        toast.error(result?.error_message || "Scan failed");
+      // Parse the result - booking_info comes as Json type from the RPC
+      const rawResult = data?.[0];
+      if (rawResult) {
+        const result: ScanResult = {
+          success: rawResult.success,
+          error_message: rawResult.error_message,
+          booking_info: rawResult.booking_info as unknown as BookingInfo | null,
+        };
+        setLastResult(result);
+        if (result.success) {
+          toast.success("Valid booking found!");
+        } else {
+          toast.error(result.error_message || "Invalid QR code");
+        }
       }
     }
 
     setIsProcessing(false);
+  };
+
+  const handleMarkAsUsed = async () => {
+    if (!lastResult?.booking_info?.booking_id) return;
+    
+    setIsMarkingUsed(true);
+    
+    const { data, error } = await supabase.rpc("mark_booking_used", {
+      p_booking_id: lastResult.booking_info.booking_id,
+    });
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      const result = (data as { success: boolean; error_message: string | null }[])?.[0];
+      if (result?.success) {
+        toast.success("Guest checked in successfully!");
+        // Update local state to show used status
+        setLastResult({
+          ...lastResult,
+          success: false,
+          error_message: "ALREADY USED - This booking has been used",
+          booking_info: {
+            ...lastResult.booking_info,
+            status: "used",
+          },
+        });
+      } else {
+        toast.error(result?.error_message || "Failed to mark as used");
+      }
+    }
+    
+    setIsMarkingUsed(false);
   };
 
   const handleManualSubmit = async () => {
@@ -114,6 +172,11 @@ const QRScanner = () => {
     setManualCode("");
   };
 
+  const resetScanner = () => {
+    setLastResult(null);
+    setManualCode("");
+  };
+
   useEffect(() => {
     return () => {
       if (scannerRef.current) {
@@ -121,6 +184,68 @@ const QRScanner = () => {
       }
     };
   }, []);
+
+  const getStatusDisplay = () => {
+    if (!lastResult) return null;
+    
+    const { success, error_message, booking_info } = lastResult;
+    
+    if (success) {
+      return {
+        icon: <CheckCircle2 className="h-8 w-8" />,
+        title: "VALID BOOKING",
+        subtitle: "Ready for boarding",
+        bgColor: "bg-green-100 dark:bg-green-900/30",
+        textColor: "text-green-800 dark:text-green-200",
+        borderColor: "border-green-300 dark:border-green-700",
+      };
+    }
+    
+    // Parse error message to determine status type
+    if (error_message?.includes("PAYMENT NOT CONFIRMED") || error_message?.includes("pending")) {
+      return {
+        icon: <Clock className="h-8 w-8" />,
+        title: "PAYMENT PENDING",
+        subtitle: "Payment not yet confirmed",
+        bgColor: "bg-yellow-100 dark:bg-yellow-900/30",
+        textColor: "text-yellow-800 dark:text-yellow-200",
+        borderColor: "border-yellow-300 dark:border-yellow-700",
+      };
+    }
+    
+    if (error_message?.includes("CANCELLED")) {
+      return {
+        icon: <XCircle className="h-8 w-8" />,
+        title: "BOOKING CANCELLED",
+        subtitle: "This booking was cancelled",
+        bgColor: "bg-red-100 dark:bg-red-900/30",
+        textColor: "text-red-800 dark:text-red-200",
+        borderColor: "border-red-300 dark:border-red-700",
+      };
+    }
+    
+    if (error_message?.includes("ALREADY USED") || error_message?.includes("ALREADY BOARDED")) {
+      return {
+        icon: <AlertTriangle className="h-8 w-8" />,
+        title: "ALREADY USED",
+        subtitle: "This booking has already been used",
+        bgColor: "bg-gray-100 dark:bg-gray-800",
+        textColor: "text-gray-800 dark:text-gray-200",
+        borderColor: "border-gray-300 dark:border-gray-600",
+      };
+    }
+    
+    return {
+      icon: <XCircle className="h-8 w-8" />,
+      title: "INVALID",
+      subtitle: error_message || "QR code not recognized",
+      bgColor: "bg-red-100 dark:bg-red-900/30",
+      textColor: "text-red-800 dark:text-red-200",
+      borderColor: "border-red-300 dark:border-red-700",
+    };
+  };
+
+  const statusDisplay = getStatusDisplay();
 
   return (
     <div className="space-y-6">
@@ -189,35 +314,30 @@ const QRScanner = () => {
         {/* Result Card */}
         <Card>
           <CardHeader>
-            <CardTitle>Scan Result</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Scan Result</span>
+              {lastResult && (
+                <Button variant="ghost" size="sm" onClick={resetScanner}>
+                  Clear
+                </Button>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {isProcessing ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : lastResult ? (
+            ) : lastResult && statusDisplay ? (
               <div className="space-y-4">
                 {/* Status Banner */}
-                <div
-                  className={`p-4 rounded-lg flex items-center gap-3 ${
-                    lastResult.success
-                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                      : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                  }`}
-                >
-                  {lastResult.success ? (
-                    <CheckCircle2 className="h-6 w-6" />
-                  ) : (
-                    <XCircle className="h-6 w-6" />
-                  )}
-                  <div>
-                    <p className="font-semibold">
-                      {lastResult.success ? "Check-in Successful" : "Check-in Failed"}
-                    </p>
-                    {lastResult.error_message && (
-                      <p className="text-sm">{lastResult.error_message}</p>
-                    )}
+                <div className={`p-4 rounded-lg border-2 ${statusDisplay.bgColor} ${statusDisplay.textColor} ${statusDisplay.borderColor}`}>
+                  <div className="flex items-center gap-3">
+                    {statusDisplay.icon}
+                    <div>
+                      <p className="font-bold text-lg">{statusDisplay.title}</p>
+                      <p className="text-sm opacity-80">{statusDisplay.subtitle}</p>
+                    </div>
                   </div>
                 </div>
 
@@ -225,32 +345,38 @@ const QRScanner = () => {
                 {lastResult.booking_info && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex items-start gap-2">
+                        <User className="h-4 w-4 text-muted-foreground mt-0.5" />
                         <div>
                           <p className="text-xs text-muted-foreground">Guest</p>
                           <p className="font-medium">{lastResult.booking_info.guest_name}</p>
+                          {lastResult.booking_info.guest_phone && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3" />
+                              {lastResult.booking_info.guest_phone}
+                            </p>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Ship className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex items-start gap-2">
+                        <Ship className="h-4 w-4 text-muted-foreground mt-0.5" />
                         <div>
                           <p className="text-xs text-muted-foreground">Yacht</p>
                           <p className="font-medium">{lastResult.booking_info.yacht_name}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex items-start gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
                         <div>
                           <p className="text-xs text-muted-foreground">Date & Time</p>
                           <p className="font-medium">
-                            {format(new Date(lastResult.booking_info.date), "MMM d, yyyy")} at{" "}
-                            {lastResult.booking_info.time_slot}
+                            {format(new Date(lastResult.booking_info.date), "MMM d, yyyy")}
                           </p>
+                          <p className="text-sm">{lastResult.booking_info.time_slot}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex items-start gap-2">
+                        <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
                         <div>
                           <p className="text-xs text-muted-foreground">Guests</p>
                           <p className="font-medium">{lastResult.booking_info.seats} people</p>
@@ -258,20 +384,54 @@ const QRScanner = () => {
                       </div>
                     </div>
 
-                    <div className="border-t pt-4">
+                    <div className="border-t pt-4 space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Booking Reference</span>
                         <span className="font-mono font-bold">
                           {lastResult.booking_info.booking_reference}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center mt-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Total Amount</span>
+                        <span className="font-bold flex items-center gap-1">
+                          <DollarSign className="h-4 w-4" />
+                          {lastResult.booking_info.total_price} EGP
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Status</span>
-                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                          {lastResult.booking_info.status}
+                        <Badge className={
+                          lastResult.booking_info.status === 'confirmed' 
+                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                            : lastResult.booking_info.status === 'used' || lastResult.booking_info.status === 'boarded'
+                            ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                            : lastResult.booking_info.status === 'cancelled'
+                            ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                        }>
+                          {lastResult.booking_info.status.replace('_', ' ').toUpperCase()}
                         </Badge>
                       </div>
                     </div>
+
+                    {/* Action Button for Valid Bookings */}
+                    {lastResult.success && lastResult.booking_info.status === 'confirmed' && (
+                      <div className="pt-4">
+                        <Button 
+                          className="w-full bg-green-600 hover:bg-green-700" 
+                          size="lg"
+                          onClick={handleMarkAsUsed}
+                          disabled={isMarkingUsed}
+                        >
+                          {isMarkingUsed ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : (
+                            <CheckCircle2 className="h-5 w-5 mr-2" />
+                          )}
+                          Confirm Boarding
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -279,7 +439,10 @@ const QRScanner = () => {
               <div className="text-center py-12">
                 <Camera className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-muted-foreground">
-                  Scan a QR code to check in a guest
+                  Scan a QR code to validate a booking
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Only confirmed bookings can board
                 </p>
               </div>
             )}

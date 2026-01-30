@@ -140,7 +140,8 @@ const YachtDetails = () => {
           qrData,
         });
         setShowConfirmation(true);
-        toast.success("Booking confirmed!");
+        // Updated message for pending payment status
+        toast.success("Booking created! Awaiting payment confirmation.");
       } else {
         toast.error(result.error || "Booking failed");
       }
@@ -421,27 +422,52 @@ const YachtDetails = () => {
         </div>
       </div>
 
-      {/* Confirmation Dialog */}
+      {/* Confirmation Dialog - Pending Payment Flow */}
       <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-center text-2xl">
-              🎉 {t("booking.success")}
+              📋 Booking Created
             </DialogTitle>
           </DialogHeader>
           {bookingData && (
             <div className="space-y-6 py-4">
+              {/* Pending Payment Notice */}
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Clock className="h-5 w-5 text-yellow-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-yellow-800 dark:text-yellow-200">Payment Required</p>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                      Your booking is created but not valid until payment is confirmed.
+                      Our team will contact you via WhatsApp or email to complete payment.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="text-center">
                 <p className="text-muted-foreground mb-2">{t("booking.reference")}</p>
                 <p className="text-2xl font-mono font-bold text-primary">{bookingData.reference}</p>
               </div>
 
-              <div className="flex justify-center">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(bookingData.qrData)}`}
-                  alt="Booking QR Code"
-                  className="w-48 h-48 rounded-lg border"
-                />
+              {/* QR Code (Inactive) */}
+              <div className="flex flex-col items-center">
+                <div className="relative">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(bookingData.qrData)}`}
+                    alt="Booking QR Code"
+                    className="w-40 h-40 rounded-lg border opacity-50 grayscale"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="bg-background/90 px-3 py-1 rounded-full text-xs font-medium text-muted-foreground border">
+                      Inactive
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  QR code activates after payment confirmation
+                </p>
               </div>
 
               <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
