@@ -49,8 +49,47 @@ export type Database = {
           },
         ]
       }
+      booking_status_history: {
+        Row: {
+          booking_id: string
+          changed_by: string | null
+          created_at: string
+          id: string
+          new_status: string
+          notes: string | null
+          previous_status: string | null
+        }
+        Insert: {
+          booking_id: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_status: string
+          notes?: string | null
+          previous_status?: string | null
+        }
+        Update: {
+          booking_id?: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_status?: string
+          notes?: string | null
+          previous_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_status_history_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
+          admin_notes: string | null
           booking_reference: string
           created_at: string
           date: string
@@ -69,6 +108,7 @@ export type Database = {
           yacht_id: string
         }
         Insert: {
+          admin_notes?: string | null
           booking_reference: string
           created_at?: string
           date: string
@@ -87,6 +127,7 @@ export type Database = {
           yacht_id: string
         }
         Update: {
+          admin_notes?: string | null
           booking_reference?: string
           created_at?: string
           date?: string
@@ -268,6 +309,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_update_booking_status: {
+        Args: { p_booking_id: string; p_new_status: string; p_notes?: string }
+        Returns: {
+          error_message: string
+          success: boolean
+        }[]
+      }
       cancel_booking: {
         Args: { p_booking_id: string }
         Returns: {
@@ -301,9 +349,24 @@ export type Database = {
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       is_owner: { Args: { _user_id: string }; Returns: boolean }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      mark_booking_used: {
+        Args: { p_booking_id: string }
+        Returns: {
+          error_message: string
+          success: boolean
+        }[]
+      }
       owns_yacht: {
         Args: { _user_id: string; _yacht_id: string }
         Returns: boolean
+      }
+      regenerate_qr_code: {
+        Args: { p_booking_id: string }
+        Returns: {
+          error_message: string
+          new_qr_code: string
+          success: boolean
+        }[]
       }
       scan_booking: {
         Args: { p_qr_code_data: string }
@@ -322,7 +385,13 @@ export type Database = {
         | "speed-boat"
         | "catamaran"
       app_role: "guest" | "owner" | "staff" | "admin"
-      booking_status: "pending" | "confirmed" | "cancelled" | "boarded"
+      booking_status:
+        | "pending"
+        | "confirmed"
+        | "cancelled"
+        | "boarded"
+        | "pending_payment"
+        | "used"
       location_type: "marsa-matruh" | "north-coast" | "alexandria" | "el-gouna"
     }
     CompositeTypes: {
@@ -459,7 +528,14 @@ export const Constants = {
         "catamaran",
       ],
       app_role: ["guest", "owner", "staff", "admin"],
-      booking_status: ["pending", "confirmed", "cancelled", "boarded"],
+      booking_status: [
+        "pending",
+        "confirmed",
+        "cancelled",
+        "boarded",
+        "pending_payment",
+        "used",
+      ],
       location_type: ["marsa-matruh", "north-coast", "alexandria", "el-gouna"],
     },
   },

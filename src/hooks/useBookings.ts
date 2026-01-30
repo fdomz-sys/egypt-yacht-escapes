@@ -14,8 +14,10 @@ export interface Booking {
   platform_fee: number;
   total_price: number;
   payment_method: string;
-  status: "pending" | "confirmed" | "cancelled" | "boarded";
+  status: "pending" | "pending_payment" | "confirmed" | "cancelled" | "boarded" | "used";
   qr_code_data: string | null;
+  admin_notes?: string | null;
+  notes?: string | null;
   created_at: string;
   yacht?: {
     name: string;
